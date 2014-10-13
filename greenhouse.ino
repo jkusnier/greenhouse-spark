@@ -1,66 +1,42 @@
 // This #include statement was automatically added by the Spark IDE.
-#include "idDHT22/idDHT22.h"
+#include "DHT.h"
 
-int idDHT22pin = D4;
-void dht22_wrapper(); // must be declared before the lib initialization
+#define DHTPIN D4
+#define DHTTYPE DHT22
 
-// DHT instantiate
-idDHT22 DHT22(idDHT22pin, dht22_wrapper);
+DHT dht(DHTPIN, DHTTYPE);
 
+#define UPDATE_DHT (15 * 1000) // 15 seconds
+#define DHT_TIMEOUT (5 * 1000) // 5 seconds
+unsigned long lastUpdateDht = millis();
+bool updatingDht = false;
+
+char temperature[10];
+char humidity[10];
+
+uint32_t currentTime;
 
 void setup()
 {
 	Serial.begin(9600);
+
+    dht.begin();
 }
 
-// This wrapper is in charge of calling
-// must be defined like this for the lib work
-void dht22_wrapper() {
-	DHT22.isrCallback();
-}
+void loop() {
+    currentTime = Time.now();
+    uint32_t n = millis();
 
-void loop()
-{
+    if (!updatingDht && (n - lastUpdateDht > UPDATE_DHT || currentTime < lastUpdateDht)) {
+        lastUpdateDht = n;
+        Serial.println("updatingDht ");
 
-	DHT22.acquire();
-	while (DHT22.acquiring())
-		;
-	int result = DHT22.getStatus();
-	switch (result)
-	{
-		case IDDHTLIB_OK:
-// 			Serial.println("OK");
-			break;
-		case IDDHTLIB_ERROR_CHECKSUM:
-			Serial.println("Error\n\r\tChecksum error");
-			break;
-		case IDDHTLIB_ERROR_ISR_TIMEOUT:
-			Serial.println("Error\n\r\tISR Time out error");
-			break;
-		case IDDHTLIB_ERROR_RESPONSE_TIMEOUT:
-			Serial.println("Error\n\r\tResponse time out error");
-			break;
-		case IDDHTLIB_ERROR_DATA_TIMEOUT:
-			Serial.println("Error\n\r\tData time out error");
-			break;
-		case IDDHTLIB_ERROR_ACQUIRING:
-			Serial.println("Error\n\r\tAcquiring");
-			break;
-		case IDDHTLIB_ERROR_DELTA:
-			Serial.println("Error\n\r\tDelta time to small");
-			break;
-		case IDDHTLIB_ERROR_NOTSTARTED:
-			Serial.println("Error\n\r\tNot started");
-			break;
-		default:
-			Serial.println("Unknown error");
-			break;
-	}
-	Serial.print("Humidity (%): ");
-	Serial.println(DHT22.getHumidity(), 2);
+				char data[64];
+				sprintf(data, "{humidity:%3.1f,celsius:%3.1f,fahrenheit:%3.2f}", dht.readHumidity(), dht.readTemperature(), dht.readTemperature(true));
+				Spark.publish("temperature", String(data), 60, PRIVATE);
 
-	Serial.print("Temperature (oC): ");
-	Serial.println(DHT22.getCelsius(), 2);
-
-	delay(10000);
+//				char fdata[64];
+//				sprintf(fdata, "%3.2f", dht.readTemperature(true));
+//				Spark.publish("temperature/fahrenheit", fdata, 60);
+    }
 }
